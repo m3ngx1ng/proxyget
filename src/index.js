@@ -122,6 +122,10 @@ async function handleLogin(request, env) {
   const password = String(body.password || '');
   const next = String(body.next || '/web');
 
+  if (!env.ADMIN_USERNAME || !env.ADMIN_PASSWORD) {
+    return json({ success: false, error: '后端环境变量未配置' }, 500);
+  }
+
   if (username !== env.ADMIN_USERNAME || password !== env.ADMIN_PASSWORD) {
     return json({ success: false, error: '用户名或密码错误' }, 401);
   }

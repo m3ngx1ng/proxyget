@@ -114,15 +114,15 @@ function decodeBase64Url(input) {
 export async function createSessionCookie(env, username) {
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
   const payload = JSON.stringify({ username, exp: expiresAt });
-  const key = await importSessionKey(env.SESSION_SECRET || env.ADMIN_PASSWORD);
+  const key = await importSessionKey(env.ADMIN_PASSWORD);
   const payloadBytes = new TextEncoder().encode(payload);
   const signature = await crypto.subtle.sign('HMAC', key, payloadBytes);
   const token = `${encodeBase64Url(payloadBytes)}.${encodeBase64Url(signature)}`;
-  return `pp_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${env.COOKIE_SECURE === '0' ? '' : '; Secure'}`;
+  return `pp_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`;
 }
 
 export function clearSessionCookie(env) {
-  return `pp_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${env.COOKIE_SECURE === '0' ? '' : '; Secure'}`;
+  return `pp_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
 export async function getSession(request, env) {
@@ -136,7 +136,7 @@ export async function getSession(request, env) {
   try {
     const payloadBytes = decodeBase64Url(payloadPart);
     const signatureBytes = decodeBase64Url(signaturePart);
-    const key = await importSessionKey(env.SESSION_SECRET || env.ADMIN_PASSWORD);
+    const key = await importSessionKey(env.ADMIN_PASSWORD);
     const verified = await crypto.subtle.verify('HMAC', key, signatureBytes, payloadBytes);
     if (!verified) {
       return null;
