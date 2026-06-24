@@ -47,8 +47,13 @@ function parseIpPortTable(html, source, protocol = 'http', options = {}) {
   return proxies;
 }
 
-async function fetchText(url) {
-  const response = await fetch(url, { headers: DEFAULT_HEADERS });
+async function fetchText(url, headers = {}) {
+  const response = await fetch(url, {
+    headers: {
+      ...DEFAULT_HEADERS,
+      ...headers,
+    },
+  });
   if (!response.ok) {
     throw new Error(`fetch failed: ${response.status} ${url}`);
   }
@@ -192,7 +197,28 @@ async function runJiangxianli() {
 }
 
 async function runIHuan() {
-  const entryHtml = await fetchText('https://ip.ihuan.me/');
+  const ihuanHeaders = {
+    referer: 'https://ip.ihuan.me/',
+    origin: 'https://ip.ihuan.me',
+    'cache-control': 'no-cache',
+    pragma: 'no-cache',
+    'sec-fetch-dest': 'document',
+    'sec-fetch-mode': 'navigate',
+    'sec-fetch-site': 'same-origin',
+    'upgrade-insecure-requests': '1',
+  };
+
+  let entryHtml;
+  try {
+    entryHtml = await fetchText('https://ip.ihuan.me/', ihuanHeaders);
+  } catch (error) {
+    const message = String(error?.message || error);
+    if (message.includes('403')) {
+      throw new Error('ip.ihuan.me returned 403, likely blocking Cloudflare Worker egress');
+    }
+    throw error;
+  }
+
   const paginationMatches = Array.from(entryHtml.matchAll(/href=["'](\?page=\d+)["']/gi), (match) => match[1]);
   const urls = ['https://ip.ihuan.me/'];
   for (const href of paginationMatches.slice(0, 3)) {
@@ -201,7 +227,7 @@ async function runIHuan() {
   const bodies = [entryHtml];
   for (const url of urls.slice(1)) {
     try {
-      bodies.push(await fetchText(url));
+      bodies.push(await fetchText(url, ihuanHeaders));
     } catch {
       continue;
     }

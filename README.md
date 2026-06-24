@@ -262,3 +262,34 @@ curl -X POST \
 2. 把当前的弱验证升级成真实验证回传模式。
 3. 为抓取器增加分批调度或队列，降低单次 Cron 压力。
 4. 给静态后台增加登录态提示和批量操作反馈。
+
+## 抓取器排障
+
+### `ip.ihuan.me` 返回 `403`
+
+如果后台或日志里看到：
+
+```text
+fetch failed: 403 https://ip.ihuan.me/
+```
+
+或者现在的新提示：
+
+```text
+ip.ihuan.me returned 403, likely blocking Cloudflare Worker egress
+```
+
+说明通常是下面这个问题，不是 D1、登录、路由或页面逻辑问题：
+
+1. Worker 已经成功发起请求。
+2. 目标站返回了 `403 Forbidden`。
+3. 这类站点经常会按出口 IP、ASN、请求特征做反爬封禁。
+4. 本地 Python 版能抓，不代表 Cloudflare Worker 出口也能抓。
+
+当前代码已经补了更接近浏览器的请求头；如果部署后仍然是 `403`，基本可以判断是源站在拦截 Cloudflare Worker。
+
+处理建议：
+
+1. 在 `/fetchers` 页面先禁用 `ip.ihuan.me`，避免它持续报错。
+2. 继续使用其它抓取器，不影响系统整体运行。
+3. 如果你必须保留这个源，建议改成你自己的外部抓取节点抓取后再回传到 Worker，而不是让 Worker 直接请求它。
