@@ -59,6 +59,10 @@ export function parseCookies(header) {
   return cookies;
 }
 
+export function normalizeCredential(value) {
+  return String(value ?? '').trim();
+}
+
 async function importSessionKey(secret) {
   const keyData = new TextEncoder().encode(secret);
   return crypto.subtle.importKey(

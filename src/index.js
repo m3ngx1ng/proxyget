@@ -24,6 +24,7 @@ import {
   isAuthorized,
   isHtmlRequest,
   json,
+  normalizeCredential,
   proxyUrl,
   redirect,
   text,
@@ -117,16 +118,28 @@ async function handleLogin(request, env) {
     return json({ success: false, error: 'method not allowed' }, 405);
   }
 
-  const body = await request.json().catch(() => ({}));
-  const username = String(body.username || '');
-  const password = String(body.password || '');
-  const next = String(body.next || '/web');
+  let body = {};
+  const contentType = request.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    body = await request.json().catch(() => ({}));
+  } else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+    const form = await request.formData().catch(() => null);
+    body = form ? Object.fromEntries(form.entries()) : {};
+  } else {
+    body = await request.json().catch(() => ({}));
+  }
 
-  if (!env.ADMIN_USERNAME || !env.ADMIN_PASSWORD) {
+  const username = normalizeCredential(body.username);
+  const password = normalizeCredential(body.password);
+  const next = String(body.next || '/web');
+  const expectedUsername = normalizeCredential(env.ADMIN_USERNAME);
+  const expectedPassword = normalizeCredential(env.ADMIN_PASSWORD);
+
+  if (!expectedUsername || !expectedPassword) {
     return json({ success: false, error: '后端环境变量未配置' }, 500);
   }
 
-  if (username !== env.ADMIN_USERNAME || password !== env.ADMIN_PASSWORD) {
+  if (username !== expectedUsername || password !== expectedPassword) {
     return json({ success: false, error: '用户名或密码错误' }, 401);
   }
 
