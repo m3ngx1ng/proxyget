@@ -17,7 +17,18 @@ import {
   upsertProxies,
 } from './repository.js';
 import { ensureSchema } from './schema.js';
-import { isAuthorized, json, proxyUrl, text, unauthorized } from './utils.js';
+import {
+  clearSessionCookie,
+  createSessionCookie,
+  html,
+  isAuthorized,
+  isHtmlRequest,
+  json,
+  proxyUrl,
+  redirect,
+  text,
+  unauthorized,
+} from './utils.js';
 
 async function runFetchCycle(env, options = {}) {
   await ensureFetchers(env.DB, fetchers);
@@ -58,8 +69,69 @@ async function runFetchCycle(env, options = {}) {
 }
 
 function requireAuth(request, env) {
-  if (!isAuthorized(request, env)) {
+  return isAuthorized(request, env).then((authorized) => {
+    if (authorized) {
+      return null;
+    }
+
+    if (isHtmlRequest(request)) {
+      const url = new URL(request.url);
+      const next = encodeURIComponent(url.pathname || '/web');
+      return redirect(`/login?next=${next}`);
+    }
+
     return unauthorized();
+  });
+}
+
+function isApiPath(path) {
+  return path === '/proxies_status'
+    || path === '/fetchers_status'
+    || path === '/validator_status'
+    || path === '/validator_control'
+    || path === '/export_proxies'
+    || path === '/clear_proxies'
+    || path === '/clear_fetchers_status'
+    || path === '/fetcher_enable'
+    || path.startsWith('/admin/');
+}
+
+function renderLoginFallback(message = '') {
+  const safeMessage = String(message || '').replace(/[<>&"]/g, (char) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[char]));
+  return html(`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>登录</title></head><body><pre>${safeMessage}</pre></body></html>`);
+}
+
+async function handleLogin(request, env) {
+  if (request.method === 'GET') {
+    const asset = await env.ASSETS.fetch(new Request(new URL('/login.html', request.url)));
+    return asset.status === 404 ? renderLoginFallback('login page missing') : asset;
+  }
+
+  if (request.method !== 'POST') {
+    return json({ success: false, error: 'method not allowed' }, 405);
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const username = String(body.username || '');
+  const password = String(body.password || '');
+  const next = String(body.next || '/web');
+
+  if (username !== env.ADMIN_USERNAME || password !== env.ADMIN_PASSWORD) {
+    return json({ success: false, error: '用户名或密码错误' }, 401);
+  }
+
+  const cookie = await createSessionCookie(env, username);
+  return json({ success: true, next }, 200, { 'set-cookie': cookie });
+}
+
+function handleLogout(env) {
+  return redirect('/login', 302, { 'set-cookie': clearSessionCookie(env) });
+}
+
+async function checkAuth(request, env, path) {
+  const authFailure = await requireAuth(request, env);
+  if (authFailure) {
+    return authFailure;
   }
   return null;
 }
@@ -84,31 +156,35 @@ async function handleApi(request, env, path) {
     return new Response(null, { status: 204 });
   }
 
-  if (isAdminPath(path)) {
-    const authFailure = requireAuth(request, env);
-    if (authFailure) {
-      return authFailure;
-    }
+  if (path === '/login') {
+    return handleLogin(request, env);
   }
 
   if (path === '/') {
-    const asset = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url)));
-    return asset.status === 404 ? json({ success: true, name: 'proxypool-worker' }) : asset;
+    const authFailure = await checkAuth(request, env, path);
+    if (authFailure) return authFailure;
+    return redirect('/web');
   }
 
   if (path === '/web') {
+    const authFailure = await checkAuth(request, env, path);
+    if (authFailure) return authFailure;
     return env.ASSETS.fetch(new Request(new URL('/index.html', request.url)));
   }
 
   if (path === '/fetchers') {
+    const authFailure = await checkAuth(request, env, path);
+    if (authFailure) return authFailure;
     return env.ASSETS.fetch(new Request(new URL('/fetchers.html', request.url)));
   }
 
   if (path === '/logout') {
-    return new Response('Logged out', {
-      status: 401,
-      headers: { 'www-authenticate': 'Basic realm="ProxyPool"' },
-    });
+    return handleLogout(env);
+  }
+
+  if (isApiPath(path)) {
+    const authFailure = await checkAuth(request, env, path);
+    if (authFailure) return authFailure;
   }
 
   if (path === '/ping') {
