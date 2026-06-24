@@ -68,21 +68,17 @@
 ADMIN_USERNAME=你的用户名
 WORKER_VALIDATE_MODE=source
 CRON_FETCH_BATCH_SIZE=3
-COOKIE_SECURE=1
 ```
 
 3. 在同一个 Worker 项目的 `Settings -> Variables and Secrets -> Secrets` 中添加：
 
 ```text
 ADMIN_PASSWORD=你的密码
-SESSION_SECRET=随机长字符串
 ```
 
 说明：
 
-- `ADMIN_PASSWORD` 用于登录校验
-- `SESSION_SECRET` 用于签名后台登录 Cookie，建议单独设置，不要和密码相同
-- 如果你只在本地 HTTP 调试，需要把 `COOKIE_SECURE=0`
+- `ADMIN_PASSWORD` 同时用于登录校验和后台登录 Cookie 签名
 
 4. 在该 Worker 项目的 `Bindings` 中添加 D1 绑定：
 
@@ -156,12 +152,6 @@ wrangler secret put ADMIN_PASSWORD
 ```
 
 说明：建议把 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD` 都放到 secret，避免明文留在配置文件里。
-
-如果你启用了登录页 Cookie 会话，建议同时添加：
-
-```bash
-wrangler secret put SESSION_SECRET
-```
 
 6. 使用本地配置部署
 
@@ -239,7 +229,8 @@ binding DB of type d1 must have a valid `database_id` specified
 
 ```bash
 curl -X POST \
-  -u admin:your-password \
+  -H 'content-type: application/json' \
+  --cookie 'pp_session=你的登录Cookie' \
   https://your-worker.example.workers.dev/admin/fetch
 ```
 
@@ -247,8 +238,8 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  -u admin:your-password \
   -H 'content-type: application/json' \
+  --cookie 'pp_session=你的登录Cookie' \
   -d '{"name":"proxyscrape.com"}' \
   https://your-worker.example.workers.dev/admin/fetch
 ```
@@ -257,8 +248,8 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  -u admin:your-password \
   -H 'content-type: application/json' \
+  --cookie 'pp_session=你的登录Cookie' \
   -d '{"protocol":"all"}' \
   https://your-worker.example.workers.dev/admin/clear
 ```

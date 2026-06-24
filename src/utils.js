@@ -42,27 +42,6 @@ export function redirect(location, status = 302, headers = {}) {
   });
 }
 
-export function parseBasicAuth(header) {
-  if (!header || !header.startsWith('Basic ')) {
-    return null;
-  }
-
-  try {
-    const decoded = atob(header.slice(6));
-    const index = decoded.indexOf(':');
-    if (index === -1) {
-      return null;
-    }
-
-    return {
-      username: decoded.slice(0, index),
-      password: decoded.slice(index + 1),
-    };
-  } catch {
-    return null;
-  }
-}
-
 export function parseCookies(header) {
   const cookies = {};
   for (const item of String(header || '').split(';')) {
