@@ -170,17 +170,24 @@ export async function getProxyStatus(db) {
 }
 
 export async function getFetcherStatus(db) {
-  const result = await db.prepare(`
-    SELECT
-      f.*,
-      COALESCE(SUM(CASE WHEN p.validated = 1 THEN 1 ELSE 0 END), 0) AS validated_cnt,
-      COALESCE(COUNT(p.protocol), 0) AS in_db_cnt
-    FROM fetchers f
-    LEFT JOIN proxies p ON p.source = f.name
-    GROUP BY f.name
-    ORDER BY f.name ASC
-  `).all();
-  return result.results;
+  const result = await db.prepare('SELECT * FROM fetchers ORDER BY name ASC').all();
+  const fetchers = result.results || [];
+
+  for (const item of fetchers) {
+    const validated = await db
+      .prepare('SELECT COUNT(*) AS count FROM proxies WHERE source = ? AND validated = 1')
+      .bind(item.name)
+      .first();
+    const inDb = await db
+      .prepare('SELECT COUNT(*) AS count FROM proxies WHERE source = ?')
+      .bind(item.name)
+      .first();
+
+    item.validated_cnt = validated?.count || 0;
+    item.in_db_cnt = inDb?.count || 0;
+  }
+
+  return fetchers;
 }
 
 export async function clearProxies(db, protocol = 'all') {

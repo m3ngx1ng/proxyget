@@ -16,6 +16,7 @@ import {
   setFetcherEnabled,
   upsertProxies,
 } from './repository.js';
+import { ensureSchema } from './schema.js';
 import { isAuthorized, json, proxyUrl, text, unauthorized } from './utils.js';
 
 async function runFetchCycle(env, options = {}) {
@@ -64,6 +65,10 @@ function requireAuth(request, env) {
 }
 
 async function handleApi(request, env, path) {
+  if (path === '/favicon.ico') {
+    return new Response(null, { status: 204 });
+  }
+
   if (path === '/') {
     const asset = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url)));
     return asset.status === 404 ? json({ success: true, name: 'proxypool-worker' }) : asset;
@@ -246,12 +251,20 @@ async function handleApi(request, env, path) {
 
 export default {
   async fetch(request, env) {
-    await ensureFetchers(env.DB, fetchers);
-    const url = new URL(request.url);
-    return handleApi(request, env, url.pathname);
+    try {
+      await ensureSchema(env.DB);
+      await ensureFetchers(env.DB, fetchers);
+      const url = new URL(request.url);
+      return await handleApi(request, env, url.pathname);
+    } catch (error) {
+      return json({ success: false, error: String(error.message || error) }, 500);
+    }
   },
 
   async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(runFetchCycle(env, { scheduled: true }));
+    ctx.waitUntil((async () => {
+      await ensureSchema(env.DB);
+      await runFetchCycle(env, { scheduled: true });
+    })());
   },
 };

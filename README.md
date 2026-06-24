@@ -97,6 +97,7 @@ ADMIN_PASSWORD=你的密码
 
 - 仓库里的 `wrangler.toml` 已经移除了占位 `database_id`，就是为了避免 Workers Builds 因无效 D1 ID 直接报错。
 - 也就是说，平台部署时，`DB` 绑定应该完全在 Cloudflare Dashboard 上配置，不依赖仓库里的静态 ID。
+- 现在 Worker 启动时也会自动执行最小建表逻辑；如果你忘了手工初始化 SQL，服务通常也能先起来。
 
 ### 方式二：本地 `wrangler` 命令行部署
 
