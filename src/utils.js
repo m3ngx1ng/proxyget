@@ -29,9 +29,7 @@ export function text(data, status = 200, headers = {}) {
 }
 
 export function unauthorized() {
-  return json({ success: false, error: 'unauthorized' }, 401, {
-    'www-authenticate': 'Basic realm="ProxyPool"',
-  });
+  return json({ success: false, error: 'unauthorized' }, 401);
 }
 
 export function redirect(location, status = 302, headers = {}) {
