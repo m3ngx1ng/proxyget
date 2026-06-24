@@ -147,6 +147,14 @@ async function handleLogin(request, env) {
   return json({ success: true, next }, 200, { 'set-cookie': cookie });
 }
 
+async function handleLoginApi(request, env) {
+  if (request.method !== 'POST') {
+    return json({ success: false, error: 'method not allowed' }, 405);
+  }
+
+  return handleLogin(request, env);
+}
+
 function handleLogout(env) {
   return redirect('/login', 302, { 'set-cookie': clearSessionCookie(env) });
 }
@@ -181,6 +189,10 @@ async function handleApi(request, env, path) {
 
   if (path === '/login') {
     return handleLogin(request, env);
+  }
+
+  if (path === '/api/login') {
+    return handleLoginApi(request, env);
   }
 
   if (path === '/') {
