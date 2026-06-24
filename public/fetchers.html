@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>爬取器管理</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', 'PingFang SC', sans-serif; background: linear-gradient(180deg, #f3f7fb 0%, #ffffff 100%); color: #0f172a; }
+    .layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+    .sidebar { background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); color: #fff; padding: 28px 20px; }
+    .brand { font-size: 24px; font-weight: 700; margin-bottom: 28px; }
+    .nav a { display: block; color: #dbeafe; text-decoration: none; padding: 12px 14px; border-radius: 12px; margin-bottom: 10px; }
+    .nav a.active, .nav a:hover { background: rgba(37, 99, 235, 0.18); color: #fff; }
+    .main { padding: 28px; }
+    .hero { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .hero h1 { margin: 0 0 8px; font-size: 30px; }
+    .hero p { margin: 0; color: #64748b; }
+    .toolbar { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn { border: 0; border-radius: 999px; padding: 11px 16px; cursor: pointer; font-weight: 600; }
+    .btn-primary { background: linear-gradient(135deg, #2563eb, #0891b2); color: #fff; }
+    .btn-secondary { background: #fff; color: #0f172a; border: 1px solid #dbe5f0; }
+    .panel { background: rgba(255,255,255,0.95); border-radius: 24px; box-shadow: 0 18px 40px rgba(15,23,42,0.08); padding: 18px; }
+    table { width: 100%; border-collapse: collapse; min-width: 960px; }
+    th, td { padding: 14px 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+    th { font-size: 12px; color: #475569; text-transform: uppercase; }
+    .tag { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .green { background: #dcfce7; color: #166534; }
+    .red { background: #fee2e2; color: #991b1b; }
+    .switch { position: relative; display: inline-block; width: 46px; height: 26px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; border-radius: 999px; background: #cbd5e1; transition: 0.2s; }
+    .slider::before { content: ''; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: 0.2s; }
+    .switch input:checked + .slider { background: #2563eb; }
+    .switch input:checked + .slider::before { transform: translateX(20px); }
+    .notice { position: fixed; right: 18px; bottom: 18px; background: #0f172a; color: #fff; padding: 12px 16px; border-radius: 12px; opacity: 0; transform: translateY(20px); transition: 0.25s; }
+    .notice.show { opacity: 1; transform: translateY(0); }
+    .meta { color: #64748b; font-size: 13px; }
+    .table-wrap { overflow: auto; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">ProxyPool</div>
+      <nav class="nav">
+        <a href="/web">可用代理</a>
+        <a class="active" href="/fetchers">爬取器</a>
+        <a href="/logout">退出登录</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <section class="hero">
+        <div>
+          <h1>爬取器管理</h1>
+          <p>支持手动触发抓取、启停抓取器和查看最近一次抓取统计。</p>
+        </div>
+        <div class="toolbar">
+          <button class="btn btn-secondary" id="refreshBtn">刷新</button>
+          <button class="btn btn-secondary" id="clearStatsBtn">清空统计</button>
+          <button class="btn btn-primary" id="runAllBtn">立即抓取全部</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap;">
+          <strong>抓取器状态</strong>
+          <div class="meta">最近刷新：<span id="lastupdate">--</span></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>当前可用代理数量</th>
+                <th>数据库中的代理数量</th>
+                <th>总共爬取代理数量</th>
+                <th>上次爬取数量</th>
+                <th>上次抓取时间</th>
+                <th>最近错误</th>
+                <th>启用</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="fetchers-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="notice" id="notice"></div>
+
+  <script>
+    const notice = document.getElementById('notice');
+    const tbody = document.getElementById('fetchers-tbody');
+
+    function showNotice(message) {
+      notice.textContent = message;
+      notice.classList.add('show');
+      setTimeout(() => notice.classList.remove('show'), 2400);
+    }
+
+    function formatDate(value) {
+      return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '';
+    }
+
+    async function update() {
+      const response = await fetch('/fetchers_status');
+      const data = await response.json();
+      document.getElementById('lastupdate').textContent = new Date().toLocaleTimeString('zh-CN');
+
+      const rows = (data.fetchers || []).map((item) => `
+        <tr>
+          <td>${item.name}</td>
+          <td>${item.validated_cnt || 0}</td>
+          <td>${item.in_db_cnt || 0}</td>
+          <td>${item.total_count || 0}</td>
+          <td>${item.last_count || 0}</td>
+          <td>${formatDate(item.last_run_at || item.last_success_at)}</td>
+          <td>${item.last_error ? `<span class="tag red">${item.last_error}</span>` : '<span class="tag green">正常</span>'}</td>
+          <td>
+            <label class="switch">
+              <input type="checkbox" ${item.enabled ? 'checked' : ''} onchange="window.toggleFetcher(${JSON.stringify(item.name)}, this.checked)">
+              <span class="slider"></span>
+            </label>
+          </td>
+          <td><button class="btn btn-secondary" onclick="window.runFetcher(${JSON.stringify(item.name)})">立即抓取</button></td>
+        </tr>
+      `).join('');
+
+      tbody.innerHTML = rows || '<tr><td colspan="9">暂无数据</td></tr>';
+    }
+
+    window.toggleFetcher = async function(name, enabled) {
+      const response = await fetch(`/fetcher_enable?name=${encodeURIComponent(name)}&enable=${enabled ? '1' : '0'}`);
+      const data = await response.json();
+      if (!data.success) throw new Error('修改失败');
+      showNotice('状态已更新');
+      await update();
+    };
+
+    window.runFetcher = async function(name) {
+      const response = await fetch('/admin/fetch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || '抓取失败');
+      showNotice(`已触发 ${name}`);
+      await update();
+    };
+
+    document.getElementById('refreshBtn').addEventListener('click', () => update().catch((error) => showNotice(error.message)));
+    document.getElementById('clearStatsBtn').addEventListener('click', async () => {
+      const response = await fetch('/clear_fetchers_status');
+      const data = await response.json();
+      if (!data.success) throw new Error('清空失败');
+      showNotice('统计已清空');
+      await update();
+    });
+    document.getElementById('runAllBtn').addEventListener('click', async () => {
+      const response = await fetch('/admin/fetch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+      const data = await response.json();
+      if (!data.success) throw new Error('触发失败');
+      showNotice('已触发全部抓取器');
+      await update();
+    });
+
+    update().catch((error) => showNotice(error.message));
+  </script>
+</body>
+</html>

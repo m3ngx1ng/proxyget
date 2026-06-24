@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>代理池管理</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', 'PingFang SC', sans-serif; background: linear-gradient(180deg, #eef2f7 0%, #f8fafc 100%); color: #1f2937; }
+    .layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+    .sidebar { background: radial-gradient(circle at top, #183b56 0%, #0f172a 70%); color: #fff; padding: 28px 20px; }
+    .brand { font-size: 24px; font-weight: 700; letter-spacing: 1px; margin-bottom: 28px; }
+    .nav a { display: block; color: #d8e6f5; text-decoration: none; padding: 12px 14px; border-radius: 12px; margin-bottom: 10px; }
+    .nav a.active, .nav a:hover { background: rgba(96, 165, 250, 0.18); color: #fff; }
+    .main { padding: 28px; }
+    .hero { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 24px; }
+    .hero h1 { margin: 0 0 8px; font-size: 30px; }
+    .hero p { margin: 0; color: #64748b; }
+    .toolbar { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn { border: 0; border-radius: 999px; padding: 11px 16px; cursor: pointer; font-weight: 600; }
+    .btn-primary { background: linear-gradient(135deg, #2563eb, #0f766e); color: #fff; }
+    .btn-secondary { background: #fff; color: #1f2937; border: 1px solid #dbe5f0; }
+    .btn-danger { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card { background: rgba(255,255,255,0.92); backdrop-filter: blur(10px); border: 1px solid rgba(148,163,184,0.18); border-radius: 20px; padding: 18px; box-shadow: 0 18px 40px rgba(15,23,42,0.08); }
+    .card .label { color: #64748b; font-size: 13px; margin-bottom: 10px; }
+    .card .value { font-size: 30px; font-weight: 700; }
+    .panel { background: rgba(255,255,255,0.95); border-radius: 22px; padding: 18px; box-shadow: 0 18px 40px rgba(15,23,42,0.08); }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .meta { color: #64748b; font-size: 13px; }
+    .table-wrap { overflow: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 960px; }
+    th, td { padding: 14px 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+    th { color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+    tbody tr:hover { background: #f8fafc; }
+    .tag { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .green { background: #dcfce7; color: #166534; }
+    .amber { background: #fef3c7; color: #92400e; }
+    .slate { background: #e2e8f0; color: #334155; }
+    dialog { border: 0; border-radius: 18px; padding: 0; width: min(440px, 92vw); box-shadow: 0 30px 80px rgba(15,23,42,0.2); }
+    .dialog-body { padding: 22px; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; margin-top: 8px; }
+    .notice { position: fixed; right: 18px; bottom: 18px; background: #0f172a; color: #fff; padding: 12px 16px; border-radius: 12px; opacity: 0; transform: translateY(20px); transition: 0.25s; }
+    .notice.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .sidebar { padding-bottom: 10px; } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">ProxyPool</div>
+      <nav class="nav">
+        <a class="active" href="/web">可用代理</a>
+        <a href="/fetchers">爬取器</a>
+        <a href="/logout">退出登录</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <section class="hero">
+        <div>
+          <h1>可用代理</h1>
+          <p>Worker + D1 版本仅提供弱验证，`validated` 代表来源抓取成功且格式合法。</p>
+        </div>
+        <div class="toolbar">
+          <button class="btn btn-secondary" id="refreshBtn">刷新</button>
+          <button class="btn btn-secondary" id="exportBtn">导出代理</button>
+          <button class="btn btn-danger" id="clearBtn">清除代理</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="card"><div class="label">全部代理数量</div><div class="value" id="sum-proxies-cnt">0</div></div>
+        <div class="card"><div class="label">当前可用代理</div><div class="value" id="validated-proxies-cnt">0</div></div>
+        <div class="card"><div class="label">等待验证</div><div class="value" id="pending-proxies-cnt">0</div></div>
+        <div class="card"><div class="label">高评分代理</div><div class="value" id="high-score-cnt">0</div></div>
+        <div class="card"><div class="label">平均延迟</div><div class="value" id="avg-latency">0</div></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <strong>代理明细</strong>
+            <div class="meta">最近刷新：<span id="lastupdate">--</span></div>
+          </div>
+          <span class="tag amber">Worker 弱验证模式</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>来源</th>
+                <th>类型</th>
+                <th>IP</th>
+                <th>端口</th>
+                <th>分数</th>
+                <th>验证模式</th>
+                <th>最近发现</th>
+              </tr>
+            </thead>
+            <tbody id="proxies-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="clearDialog">
+    <div class="dialog-body">
+      <h3>清除代理</h3>
+      <label>代理类型
+        <select id="clearProtocol">
+          <option value="all">全部代理</option>
+          <option value="http">HTTP</option>
+          <option value="https">HTTPS</option>
+          <option value="socks4">SOCKS4</option>
+          <option value="socks5">SOCKS5</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" id="clearCancelBtn">取消</button>
+        <button class="btn btn-danger" id="clearConfirmBtn">确认</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="exportDialog">
+    <div class="dialog-body">
+      <h3>导出代理</h3>
+      <label>导出类型
+        <select id="exportType">
+          <option value="validated">已验证代理</option>
+          <option value="all">全部代理</option>
+        </select>
+      </label>
+      <label>协议类型
+        <select id="exportProtocol">
+          <option value="all">全部协议</option>
+          <option value="http">HTTP</option>
+          <option value="https">HTTPS</option>
+          <option value="socks4">SOCKS4</option>
+          <option value="socks5">SOCKS5</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" id="exportCancelBtn">取消</button>
+        <button class="btn btn-primary" id="exportConfirmBtn">导出</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="notice" id="notice"></div>
+
+  <script>
+    const notice = document.getElementById('notice');
+    const proxiesTbody = document.getElementById('proxies-tbody');
+
+    function showNotice(message) {
+      notice.textContent = message;
+      notice.classList.add('show');
+      setTimeout(() => notice.classList.remove('show'), 2400);
+    }
+
+    function formatDate(value) {
+      if (!value) return '';
+      return new Date(value).toLocaleString('zh-CN', { hour12: false });
+    }
+
+    async function update() {
+      const response = await fetch('/proxies_status');
+      const data = await response.json();
+
+      document.getElementById('sum-proxies-cnt').textContent = data.sum_proxies_cnt || 0;
+      document.getElementById('validated-proxies-cnt').textContent = data.validated_proxies_cnt || 0;
+      document.getElementById('pending-proxies-cnt').textContent = data.pending_proxies_cnt || 0;
+      document.getElementById('high-score-cnt').textContent = data.high_score_cnt || 0;
+      document.getElementById('avg-latency').textContent = data.avg_latency || 0;
+      document.getElementById('lastupdate').textContent = new Date().toLocaleTimeString('zh-CN');
+
+      const rows = (data.proxies || []).map((item) => `
+        <tr>
+          <td>${item.source || item.fetcher_name || ''}</td>
+          <td><span class="tag slate">${item.protocol}</span></td>
+          <td>${item.ip}</td>
+          <td>${item.port}</td>
+          <td>${Number(item.score || 0).toFixed(2)}</td>
+          <td><span class="tag amber">${item.validation_mode || 'source'}</span></td>
+          <td>${formatDate(item.last_seen_at || item.to_validate_date)}</td>
+        </tr>
+      `).join('');
+      proxiesTbody.innerHTML = rows || '<tr><td colspan="7">暂无数据</td></tr>';
+    }
+
+    async function clearProxies() {
+      const protocol = document.getElementById('clearProtocol').value;
+      const response = await fetch('/clear_proxies', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ protocol })
+      });
+      const data = await response.json();
+      showNotice(`已清除 ${data.deleted_count || 0} 个代理`);
+      document.getElementById('clearDialog').close();
+      await update();
+    }
+
+    async function exportProxies() {
+      const type = document.getElementById('exportType').value;
+      const protocol = document.getElementById('exportProtocol').value;
+      const response = await fetch('/export_proxies', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type, protocol })
+      });
+      const body = await response.text();
+      const blob = new Blob([body], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `proxies_${type}_${protocol}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      document.getElementById('exportDialog').close();
+      showNotice('导出成功');
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', () => update().catch((error) => showNotice(error.message)));
+    document.getElementById('clearBtn').addEventListener('click', () => document.getElementById('clearDialog').showModal());
+    document.getElementById('exportBtn').addEventListener('click', () => document.getElementById('exportDialog').showModal());
+    document.getElementById('clearCancelBtn').addEventListener('click', () => document.getElementById('clearDialog').close());
+    document.getElementById('exportCancelBtn').addEventListener('click', () => document.getElementById('exportDialog').close());
+    document.getElementById('clearConfirmBtn').addEventListener('click', () => clearProxies().catch((error) => showNotice(error.message)));
+    document.getElementById('exportConfirmBtn').addEventListener('click', () => exportProxies().catch((error) => showNotice(error.message)));
+    update().catch((error) => showNotice(error.message));
+  </script>
+</body>
+</html>
