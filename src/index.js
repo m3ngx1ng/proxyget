@@ -64,9 +64,31 @@ function requireAuth(request, env) {
   return null;
 }
 
+function isAdminPath(path) {
+  return path === '/'
+    || path === '/web'
+    || path === '/fetchers'
+    || path === '/proxies_status'
+    || path === '/fetchers_status'
+    || path === '/validator_status'
+    || path === '/validator_control'
+    || path === '/export_proxies'
+    || path === '/clear_proxies'
+    || path === '/clear_fetchers_status'
+    || path === '/fetcher_enable'
+    || path.startsWith('/admin/');
+}
+
 async function handleApi(request, env, path) {
   if (path === '/favicon.ico') {
     return new Response(null, { status: 204 });
+  }
+
+  if (isAdminPath(path)) {
+    const authFailure = requireAuth(request, env);
+    if (authFailure) {
+      return authFailure;
+    }
   }
 
   if (path === '/') {
@@ -159,19 +181,10 @@ async function handleApi(request, env, path) {
   }
 
   if (path === '/validator_control' && request.method === 'POST') {
-    const authFailure = requireAuth(request, env);
-    if (authFailure) {
-      return authFailure;
-    }
     return json({ success: true, paused: true, supported: false, message: 'worker mode does not support runtime validator control' });
   }
 
   if (path === '/export_proxies' && request.method === 'POST') {
-    const authFailure = requireAuth(request, env);
-    if (authFailure) {
-      return authFailure;
-    }
-
     const body = await request.json().catch(() => ({}));
     const exportType = body.type === 'all' ? 'all' : 'validated';
     const protocol = body.protocol || 'all';
@@ -180,11 +193,6 @@ async function handleApi(request, env, path) {
   }
 
   if (path === '/admin/fetch' && request.method === 'POST') {
-    const authFailure = requireAuth(request, env);
-    if (authFailure) {
-      return authFailure;
-    }
-
     const body = await request.json().catch(() => ({}));
     const fetcherName = body.name || null;
     if (fetcherName && !getFetcher(fetcherName)) {
@@ -196,11 +204,6 @@ async function handleApi(request, env, path) {
   }
 
   if (path === '/admin/clear' && request.method === 'POST') {
-    const authFailure = requireAuth(request, env);
-    if (authFailure) {
-      return authFailure;
-    }
-
     const body = await request.json().catch(() => ({}));
     const protocol = body.protocol || 'all';
     const deleted = await clearProxies(env.DB, protocol);
@@ -208,11 +211,6 @@ async function handleApi(request, env, path) {
   }
 
   if (path === '/clear_proxies' && request.method === 'POST') {
-    const authFailure = requireAuth(request, env);
-    if (authFailure) {
-      return authFailure;
-    }
-
     const body = await request.json().catch(() => ({}));
     const protocol = body.protocol || 'all';
     const deleted = await clearProxies(env.DB, protocol);
@@ -220,21 +218,11 @@ async function handleApi(request, env, path) {
   }
 
   if (path === '/clear_fetchers_status') {
-    const authFailure = requireAuth(request, env);
-    if (authFailure) {
-      return authFailure;
-    }
-
     await clearFetcherStats(env.DB);
     return json({ success: true });
   }
 
   if (path === '/fetcher_enable') {
-    const authFailure = requireAuth(request, env);
-    if (authFailure) {
-      return authFailure;
-    }
-
     const url = new URL(request.url);
     const name = url.searchParams.get('name');
     const enable = url.searchParams.get('enable') === '1';
