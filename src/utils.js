@@ -70,7 +70,12 @@ export function parseCookies(header) {
     if (!key) {
       continue;
     }
-    cookies[key] = decodeURIComponent(rest.join('='));
+    const val = rest.join('=');
+    try {
+      cookies[key] = decodeURIComponent(val);
+    } catch {
+      cookies[key] = val; // 如果无法解码（比如带有非转义的 %），保留原值
+    }
   }
   return cookies;
 }
