@@ -35,6 +35,7 @@
 2. 没有真实代理链路验证。
 3. `validated=1` 代表“抓取源已返回且格式有效”，不是 `requests(proxies=...)` 那种真实可用性验证。
 4. 为适配 Worker 运行时长，部分高开销抓取器采用抽样页抓取，不再完全照搬 Python 版的全页遍历。
+5. Cron 不再每次运行全部抓取器，而是按游标轮转分批执行。
 
 ## 目录说明
 
@@ -72,6 +73,16 @@ wrangler secret put ADMIN_PASSWORD
 
 说明：建议把 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD` 都放到 secret，避免明文留在配置文件里。
 
+5. 按需调整批量抓取大小
+
+`wrangler.toml` 中提供了：
+
+```toml
+CRON_FETCH_BATCH_SIZE = "3"
+```
+
+含义：每次 Cron 触发时，只轮转执行这么多个已启用抓取器。默认 `3`，更稳；如果你观察到运行时间仍然偏长，可以进一步降到 `1` 或 `2`。
+
 ## 本地开发
 
 ```bash
@@ -90,6 +101,13 @@ wrangler deploy
 
 - `/web`: 代理管理页
 - `/fetchers`: 爬取器管理页
+
+## 调度行为
+
+1. `Cron` 任务默认每 15 分钟触发一次。
+2. 每次只抓取 `CRON_FETCH_BATCH_SIZE` 个已启用抓取器。
+3. Worker 会把当前抓取游标写进 D1 的 `meta` 表，下次从下一个抓取器继续。
+4. `POST /admin/fetch` 的手动触发不受这个批量限制，仍然支持单个抓取器或全部抓取器立即执行。
 
 ## 管理接口
 

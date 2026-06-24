@@ -17,3 +17,4 @@ database_id = "replace-with-your-d1-database-id"
 [vars]
 ADMIN_USERNAME = "admin"
 WORKER_VALIDATE_MODE = "source"
+CRON_FETCH_BATCH_SIZE = "3"

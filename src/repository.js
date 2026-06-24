@@ -42,6 +42,19 @@ export async function clearFetcherStats(db) {
     .run();
 }
 
+export async function getMetaValue(db, key, defaultValue = null) {
+  const row = await db.prepare('SELECT value FROM meta WHERE key = ?').bind(key).first();
+  return row?.value ?? defaultValue;
+}
+
+export async function setMetaValue(db, key, value) {
+  await db
+    .prepare(`INSERT INTO meta (key, value) VALUES (?, ?)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+    .bind(key, String(value))
+    .run();
+}
+
 export async function upsertProxies(db, fetcherName, proxies, validationMode) {
   const now = nowIso();
   let inserted = 0;

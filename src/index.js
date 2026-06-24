@@ -7,22 +7,38 @@ import {
   getAllByProtocol,
   getAllProxies,
   getFetcherStatus,
+  getMetaValue,
   getProxyByProtocol,
   getProxyStatus,
   getRandomValidated,
   markFetcherRun,
+  setMetaValue,
   setFetcherEnabled,
   upsertProxies,
 } from './repository.js';
 import { isAuthorized, json, proxyUrl, text, unauthorized } from './utils.js';
 
-async function runFetchCycle(env, selectedName = null) {
+async function runFetchCycle(env, options = {}) {
   await ensureFetchers(env.DB, fetchers);
+
+  const { selectedName = null, scheduled = false } = options;
 
   const fetcherStatus = await getFetcherStatus(env.DB);
   const enabledNames = new Set(fetcherStatus.filter((item) => item.enabled).map((item) => item.name));
-  const jobs = (selectedName ? fetchers.filter((item) => item.name === selectedName) : fetchers)
+  let jobs = (selectedName ? fetchers.filter((item) => item.name === selectedName) : fetchers)
     .filter((item) => selectedName || enabledNames.has(item.name));
+
+  if (scheduled && jobs.length > 0) {
+    const batchSize = Math.max(1, Number.parseInt(env.CRON_FETCH_BATCH_SIZE || '3', 10) || 3);
+    const cursorRaw = await getMetaValue(env.DB, 'fetcher_cursor', '0');
+    const cursor = Number.parseInt(cursorRaw, 10) || 0;
+    const start = cursor % jobs.length;
+    const orderedJobs = jobs.slice(start).concat(jobs.slice(0, start));
+    jobs = orderedJobs.slice(0, batchSize);
+    const nextCursor = (start + jobs.length) % (enabledNames.size || jobs.length || 1);
+    await setMetaValue(env.DB, 'fetcher_cursor', nextCursor);
+  }
+
   const results = [];
 
   for (const job of jobs) {
@@ -170,7 +186,7 @@ async function handleApi(request, env, path) {
       return json({ success: false, error: 'unknown fetcher' }, 404);
     }
 
-    const results = await runFetchCycle(env, fetcherName);
+    const results = await runFetchCycle(env, { selectedName: fetcherName, scheduled: false });
     return json({ success: true, results });
   }
 
@@ -236,6 +252,6 @@ export default {
   },
 
   async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(runFetchCycle(env));
+    ctx.waitUntil(runFetchCycle(env, { scheduled: true }));
   },
 };
