@@ -103,6 +103,12 @@ function renderLoginFallback(message = '') {
 
 async function handleLogin(request, env) {
   if (request.method === 'GET') {
+    if (await isAuthorized(request, env)) {
+      const url = new URL(request.url);
+      const next = url.searchParams.get('next') || '/web';
+      return redirect(next);
+    }
+
     const asset = await env.ASSETS.fetch(new Request(new URL('/login.html', request.url)));
     return asset.status === 404 ? renderLoginFallback('login page missing') : asset;
   }
@@ -161,9 +167,10 @@ async function handleApi(request, env, path) {
   }
 
   if (path === '/') {
-    const authFailure = await checkAuth(request, env, path);
-    if (authFailure) return authFailure;
-    return redirect('/web');
+    if (await isAuthorized(request, env)) {
+      return redirect('/web');
+    }
+    return redirect('/login');
   }
 
   if (path === '/web') {

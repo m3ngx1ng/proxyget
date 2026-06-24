@@ -3,162 +3,250 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>代理池管理</title>
+  <title>ProxyPool - 代理池管理</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: 'Segoe UI', 'PingFang SC', sans-serif; background: linear-gradient(180deg, #eef2f7 0%, #f8fafc 100%); color: #1f2937; }
-    .layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
-    .sidebar { background: radial-gradient(circle at top, #183b56 0%, #0f172a 70%); color: #fff; padding: 28px 20px; }
-    .brand { font-size: 24px; font-weight: 700; letter-spacing: 1px; margin-bottom: 28px; }
-    .nav a { display: block; color: #d8e6f5; text-decoration: none; padding: 12px 14px; border-radius: 12px; margin-bottom: 10px; }
-    .nav a.active, .nav a:hover { background: rgba(96, 165, 250, 0.18); color: #fff; }
-    .main { padding: 28px; }
-    .hero { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 24px; }
-    .hero h1 { margin: 0 0 8px; font-size: 30px; }
-    .hero p { margin: 0; color: #64748b; }
-    .toolbar { display: flex; gap: 12px; flex-wrap: wrap; }
-    .btn { border: 0; border-radius: 999px; padding: 11px 16px; cursor: pointer; font-weight: 600; }
-    .btn-primary { background: linear-gradient(135deg, #2563eb, #0f766e); color: #fff; }
-    .btn-secondary { background: #fff; color: #1f2937; border: 1px solid #dbe5f0; }
-    .btn-danger { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .card { background: rgba(255,255,255,0.92); backdrop-filter: blur(10px); border: 1px solid rgba(148,163,184,0.18); border-radius: 20px; padding: 18px; box-shadow: 0 18px 40px rgba(15,23,42,0.08); }
-    .card .label { color: #64748b; font-size: 13px; margin-bottom: 10px; }
-    .card .value { font-size: 30px; font-weight: 700; }
-    .panel { background: rgba(255,255,255,0.95); border-radius: 22px; padding: 18px; box-shadow: 0 18px 40px rgba(15,23,42,0.08); }
-    .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
-    .meta { color: #64748b; font-size: 13px; }
-    .table-wrap { overflow: auto; }
-    table { width: 100%; border-collapse: collapse; min-width: 960px; }
-    th, td { padding: 14px 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }
-    th { color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
-    tbody tr:hover { background: #f8fafc; }
-    .tag { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-    .green { background: #dcfce7; color: #166534; }
-    .amber { background: #fef3c7; color: #92400e; }
-    .slate { background: #e2e8f0; color: #334155; }
-    dialog { border: 0; border-radius: 18px; padding: 0; width: min(440px, 92vw); box-shadow: 0 30px 80px rgba(15,23,42,0.2); }
-    .dialog-body { padding: 22px; }
-    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-    select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; margin-top: 8px; }
-    .notice { position: fixed; right: 18px; bottom: 18px; background: #0f172a; color: #fff; padding: 12px 16px; border-radius: 12px; opacity: 0; transform: translateY(20px); transition: 0.25s; }
-    .notice.show { opacity: 1; transform: translateY(0); }
-    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .sidebar { padding-bottom: 10px; } }
+    /* Glassmorphism helpers */
+    .glass { background: rgba(255,255,255,0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.4); }
+    .glass-dark { background: rgba(15,23,42,0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
+    .card-glass { background: rgba(255,255,255,0.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.5); }
+    .sidebar-gradient { background: linear-gradient(160deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); }
+    .sidebar-accent { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+    .btn-gradient-primary { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+    .btn-gradient-primary:hover { background: linear-gradient(135deg, #2563eb, #0891b2); transform: translateY(-1px); box-shadow: 0 8px 25px rgba(59,130,246,0.35); }
+    .btn-gradient-danger { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .btn-gradient-danger:hover { background: linear-gradient(135deg, #dc2626, #b91c1c); transform: translateY(-1px); box-shadow: 0 8px 25px rgba(239,68,68,0.35); }
+    .btn-ghost { background: rgba(255,255,255,0.6); border: 1px solid rgba(148,163,184,0.25); }
+    .btn-ghost:hover { background: rgba(255,255,255,0.9); border-color: rgba(148,163,184,0.5); transform: translateY(-1px); }
+    .transition-all { transition: all 0.2s ease; }
+    .shadow-soft { box-shadow: 0 4px 20px rgba(15,23,42,0.06); }
+    .shadow-soft-lg { box-shadow: 0 12px 40px rgba(15,23,42,0.08); }
+    .shadow-soft-xl { box-shadow: 0 20px 60px rgba(15,23,42,0.1); }
+    .tr-hover:hover { background: rgba(59,130,246,0.04); }
+    dialog { border: none; }
+    dialog::backdrop { background: rgba(15,23,42,0.5); backdrop-filter: blur(4px); }
+    .notice { transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+    .tag { transition: all 0.15s ease; }
   </style>
 </head>
-<body>
-  <div class="layout">
-    <aside class="sidebar">
-      <div class="brand">ProxyPool</div>
-      <nav class="nav">
-        <a class="active" href="/web">可用代理</a>
-        <a href="/fetchers">爬取器</a>
-        <a href="/logout">退出登录</a>
-      </nav>
-    </aside>
-    <main class="main">
-      <section class="hero">
-        <div>
-          <h1>可用代理</h1>
-          <p>Worker + D1 版本仅提供弱验证，`validated` 代表来源抓取成功且格式合法。</p>
-        </div>
-        <div class="toolbar">
-          <button class="btn btn-secondary" id="refreshBtn">刷新</button>
-          <button class="btn btn-secondary" id="exportBtn">导出代理</button>
-          <button class="btn btn-danger" id="clearBtn">清除代理</button>
-        </div>
-      </section>
-
-      <section class="grid">
-        <div class="card"><div class="label">全部代理数量</div><div class="value" id="sum-proxies-cnt">0</div></div>
-        <div class="card"><div class="label">当前可用代理</div><div class="value" id="validated-proxies-cnt">0</div></div>
-        <div class="card"><div class="label">等待验证</div><div class="value" id="pending-proxies-cnt">0</div></div>
-        <div class="card"><div class="label">高评分代理</div><div class="value" id="high-score-cnt">0</div></div>
-        <div class="card"><div class="label">平均延迟</div><div class="value" id="avg-latency">0</div></div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <strong>代理明细</strong>
-            <div class="meta">最近刷新：<span id="lastupdate">--</span></div>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="sidebar-gradient w-60 shrink-0 flex flex-col relative overflow-hidden">
+      <div class="absolute top-0 left-0 right-0 h-1 sidebar-accent"></div>
+      <div class="p-6 pb-4">
+        <div class="flex items-center gap-3 mb-8">
+          <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+            <i class="fas fa-shield-halved text-cyan-400 text-lg"></i>
           </div>
-          <span class="tag amber">Worker 弱验证模式</span>
+          <span class="text-xl font-bold tracking-tight text-white">ProxyPool</span>
         </div>
-        <div class="table-wrap">
-          <table>
+        <nav class="space-y-1">
+          <a class="active flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all bg-white/10 text-white shadow-sm" href="/web">
+            <i class="fas fa-globe w-5 text-center text-cyan-300"></i>可用代理
+          </a>
+          <a class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-300 hover:bg-white/5 hover:text-white" href="/fetchers">
+            <i class="fas fa-cloud-arrow-down w-5 text-center text-slate-400"></i>爬取器
+          </a>
+          <a class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-300 hover:bg-white/5 hover:text-white" href="/logout">
+            <i class="fas fa-right-from-bracket w-5 text-center text-slate-400"></i>退出登录
+          </a>
+        </nav>
+      </div>
+      <div class="mt-auto p-6 pt-2">
+        <div class="glass-dark rounded-xl p-4 text-xs text-slate-400 leading-relaxed">
+          <div class="flex items-center gap-2 mb-1.5">
+            <i class="fas fa-circle-check text-emerald-400 text-[10px]"></i>
+            <span class="font-medium text-slate-300">Worker 弱验证</span>
+          </div>
+          Worker + D1 版本仅提供弱验证，来源抓取成功且格式合法即标记为 validated。
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 p-6 lg:p-8 overflow-auto">
+      <!-- Hero -->
+      <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
+        <div>
+          <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800">可用代理</h1>
+          <p class="text-slate-500 text-sm mt-1">Worker + D1 版本仅提供弱验证，`validated` 代表来源抓取成功且格式合法。</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn-ghost inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-700 transition-all shadow-soft" id="refreshBtn">
+            <i class="fas fa-rotate text-slate-400"></i>刷新
+          </button>
+          <button class="btn-ghost inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-700 transition-all shadow-soft" id="exportBtn">
+            <i class="fas fa-download text-slate-400"></i>导出代理
+          </button>
+          <button class="btn-gradient-danger inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all shadow-soft" id="clearBtn">
+            <i class="fas fa-trash-can"></i>清除代理
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <div class="card-glass rounded-2xl p-5 transition-all hover:shadow-soft-lg hover:-translate-y-0.5 shadow-soft">
+          <div class="flex items-center gap-2 text-slate-400 text-xs font-medium uppercase tracking-wider mb-3">
+            <i class="fas fa-layer-group text-xs"></i>全部代理
+          </div>
+          <div class="text-3xl font-bold text-slate-800" id="sum-proxies-cnt">0</div>
+        </div>
+        <div class="card-glass rounded-2xl p-5 transition-all hover:shadow-soft-lg hover:-translate-y-0.5 shadow-soft">
+          <div class="flex items-center gap-2 text-emerald-500 text-xs font-medium uppercase tracking-wider mb-3">
+            <i class="fas fa-circle-check text-xs"></i>当前可用
+          </div>
+          <div class="text-3xl font-bold text-emerald-600" id="validated-proxies-cnt">0</div>
+        </div>
+        <div class="card-glass rounded-2xl p-5 transition-all hover:shadow-soft-lg hover:-translate-y-0.5 shadow-soft">
+          <div class="flex items-center gap-2 text-amber-500 text-xs font-medium uppercase tracking-wider mb-3">
+            <i class="fas fa-clock text-xs"></i>等待验证
+          </div>
+          <div class="text-3xl font-bold text-amber-600" id="pending-proxies-cnt">0</div>
+        </div>
+        <div class="card-glass rounded-2xl p-5 transition-all hover:shadow-soft-lg hover:-translate-y-0.5 shadow-soft">
+          <div class="flex items-center gap-2 text-violet-500 text-xs font-medium uppercase tracking-wider mb-3">
+            <i class="fas fa-star text-xs"></i>高评分
+          </div>
+          <div class="text-3xl font-bold text-violet-600" id="high-score-cnt">0</div>
+        </div>
+        <div class="card-glass rounded-2xl p-5 transition-all hover:shadow-soft-lg hover:-translate-y-0.5 shadow-soft">
+          <div class="flex items-center gap-2 text-sky-500 text-xs font-medium uppercase tracking-wider mb-3">
+            <i class="fas fa-gauge-high text-xs"></i>平均延迟
+          </div>
+          <div class="text-3xl font-bold text-sky-600" id="avg-latency">0</div>
+        </div>
+      </div>
+
+      <!-- Table Panel -->
+      <div class="glass rounded-2xl shadow-soft-lg overflow-hidden">
+        <div class="flex items-center justify-between gap-3 p-5 pb-3 border-b border-slate-100">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+              <i class="fas fa-table-list text-blue-500 text-sm"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-semibold text-slate-700">代理明细</h2>
+              <p class="text-xs text-slate-400">最近刷新：<span id="lastupdate" class="text-slate-500 font-medium">--</span></p>
+            </div>
+          </div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/50">
+            <i class="fas fa-triangle-exclamation text-[10px]"></i>弱验证模式
+          </span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full">
             <thead>
-              <tr>
-                <th>来源</th>
-                <th>类型</th>
-                <th>IP</th>
-                <th>端口</th>
-                <th>分数</th>
-                <th>验证模式</th>
-                <th>最近发现</th>
+              <tr class="border-b border-slate-100">
+                <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">来源</th>
+                <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">类型</th>
+                <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">IP</th>
+                <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">端口</th>
+                <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">分数</th>
+                <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">验证模式</th>
+                <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">最近发现</th>
               </tr>
             </thead>
             <tbody id="proxies-tbody"></tbody>
           </table>
         </div>
-      </section>
+      </div>
     </main>
   </div>
 
-  <dialog id="clearDialog">
-    <div class="dialog-body">
-      <h3>清除代理</h3>
-      <label>代理类型
-        <select id="clearProtocol">
+  <!-- Clear Dialog -->
+  <dialog id="clearDialog" class="rounded-2xl shadow-soft-xl w-full max-w-sm p-0">
+    <div class="p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+          <i class="fas fa-trash-can text-red-500"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-slate-800">清除代理</h3>
+          <p class="text-sm text-slate-400">选择要清除的代理类型</p>
+        </div>
+      </div>
+      <label class="block text-sm font-medium text-slate-600 mb-1.5">代理类型</label>
+      <div class="relative">
+        <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+        <select id="clearProtocol" class="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-10 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all">
           <option value="all">全部代理</option>
           <option value="http">HTTP</option>
           <option value="https">HTTPS</option>
           <option value="socks4">SOCKS4</option>
           <option value="socks5">SOCKS5</option>
         </select>
-      </label>
-      <div class="dialog-actions">
-        <button class="btn btn-secondary" id="clearCancelBtn">取消</button>
-        <button class="btn btn-danger" id="clearConfirmBtn">确认</button>
+      </div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button class="btn-ghost px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 transition-all" id="clearCancelBtn">取消</button>
+        <button class="btn-gradient-danger inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all" id="clearConfirmBtn">
+          <i class="fas fa-trash-can"></i>确认清除
+        </button>
       </div>
     </div>
   </dialog>
 
-  <dialog id="exportDialog">
-    <div class="dialog-body">
-      <h3>导出代理</h3>
-      <label>导出类型
-        <select id="exportType">
+  <!-- Export Dialog -->
+  <dialog id="exportDialog" class="rounded-2xl shadow-soft-xl w-full max-w-sm p-0">
+    <div class="p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+          <i class="fas fa-download text-blue-500"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-slate-800">导出代理</h3>
+          <p class="text-sm text-slate-400">选择导出范围和协议</p>
+        </div>
+      </div>
+      <label class="block text-sm font-medium text-slate-600 mb-1.5">导出类型</label>
+      <div class="relative mb-3">
+        <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+        <select id="exportType" class="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-10 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all">
           <option value="validated">已验证代理</option>
           <option value="all">全部代理</option>
         </select>
-      </label>
-      <label>协议类型
-        <select id="exportProtocol">
+      </div>
+      <label class="block text-sm font-medium text-slate-600 mb-1.5">协议类型</label>
+      <div class="relative">
+        <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+        <select id="exportProtocol" class="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-10 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all">
           <option value="all">全部协议</option>
           <option value="http">HTTP</option>
           <option value="https">HTTPS</option>
           <option value="socks4">SOCKS4</option>
           <option value="socks5">SOCKS5</option>
         </select>
-      </label>
-      <div class="dialog-actions">
-        <button class="btn btn-secondary" id="exportCancelBtn">取消</button>
-        <button class="btn btn-primary" id="exportConfirmBtn">导出</button>
+      </div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button class="btn-ghost px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 transition-all" id="exportCancelBtn">取消</button>
+        <button class="btn-gradient-primary inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all" id="exportConfirmBtn">
+          <i class="fas fa-download"></i>导出
+        </button>
       </div>
     </div>
   </dialog>
 
-  <div class="notice" id="notice"></div>
+  <!-- Notice Toast -->
+  <div class="notice fixed right-5 bottom-5 glass-dark rounded-xl px-5 py-3 shadow-soft-xl opacity-0 translate-y-4 pointer-events-none flex items-center gap-2.5 text-sm text-white z-50" id="notice">
+    <i class="fas fa-circle-check text-emerald-400"></i>
+    <span id="notice-text"></span>
+  </div>
 
   <script>
     const notice = document.getElementById('notice');
+    const noticeText = document.getElementById('notice-text');
     const proxiesTbody = document.getElementById('proxies-tbody');
 
     function showNotice(message) {
-      notice.textContent = message;
-      notice.classList.add('show');
-      setTimeout(() => notice.classList.remove('show'), 2400);
+      noticeText.textContent = message;
+      notice.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+      notice.classList.add('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+        notice.classList.remove('opacity-100', 'translate-y-0');
+        notice.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+      }, 2400);
     }
 
     function formatDate(value) {
@@ -178,17 +266,21 @@
       document.getElementById('lastupdate').textContent = new Date().toLocaleTimeString('zh-CN');
 
       const rows = (data.proxies || []).map((item) => `
-        <tr>
-          <td>${item.source || item.fetcher_name || ''}</td>
-          <td><span class="tag slate">${item.protocol}</span></td>
-          <td>${item.ip}</td>
-          <td>${item.port}</td>
-          <td>${Number(item.score || 0).toFixed(2)}</td>
-          <td><span class="tag amber">${item.validation_mode || 'source'}</span></td>
-          <td>${formatDate(item.last_seen_at || item.to_validate_date)}</td>
+        <tr class="border-b border-slate-50 tr-hover transition-all">
+          <td class="px-5 py-3.5 text-sm text-slate-700">${item.source || item.fetcher_name || ''}</td>
+          <td class="px-5 py-3.5"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">${item.protocol}</span></td>
+          <td class="px-5 py-3.5 text-sm font-mono text-slate-700">${item.ip}</td>
+          <td class="px-5 py-3.5 text-sm font-mono text-slate-500">${item.port}</td>
+          <td class="px-5 py-3.5">
+            <span class="inline-flex items-center gap-1 text-sm font-semibold ${Number(item.score || 0) >= 8 ? 'text-emerald-600' : Number(item.score || 0) >= 5 ? 'text-amber-600' : 'text-slate-500'}">
+              ${Number(item.score || 0).toFixed(2)}
+            </span>
+          </td>
+          <td class="px-5 py-3.5"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">${item.validation_mode || 'source'}</span></td>
+          <td class="px-5 py-3.5 text-sm text-slate-400">${formatDate(item.last_seen_at || item.to_validate_date)}</td>
         </tr>
       `).join('');
-      proxiesTbody.innerHTML = rows || '<tr><td colspan="7">暂无数据</td></tr>';
+      proxiesTbody.innerHTML = rows || '<tr><td colspan="7" class="px-5 py-10 text-center text-slate-400"><i class="fas fa-inbox text-xl mb-2 block"></i>暂无数据</td></tr>';
     }
 
     async function clearProxies() {
