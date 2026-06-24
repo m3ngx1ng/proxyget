@@ -9,11 +9,6 @@ binding = "ASSETS"
 [triggers]
 crons = ["*/15 * * * *"]
 
-[[d1_databases]]
-binding = "DB"
-database_name = "proxypool"
-database_id = "replace-with-your-d1-database-id"
-
 [vars]
 ADMIN_USERNAME = "admin"
 WORKER_VALIDATE_MODE = "source"

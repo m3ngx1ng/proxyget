@@ -50,21 +50,96 @@
 
 ## 初始化
 
+这里分两种方式：
+
+1. `Cloudflare Dashboard / Workers Builds` 平台部署
+2. 本地 `wrangler` 命令行部署
+
+这两种方式的 `D1` 绑定配置方式不一样。
+
+### 方式一：Cloudflare Dashboard / Workers Builds
+
+如果你是把仓库直接连到 Cloudflare 平台自动构建，按下面做：
+
+1. 在 Cloudflare Dashboard 创建 Worker 项目。
+2. 在该 Worker 项目的 `Settings -> Variables and Secrets` 中添加：
+
+```text
+ADMIN_USERNAME=你的用户名
+WORKER_VALIDATE_MODE=source
+CRON_FETCH_BATCH_SIZE=3
+```
+
+3. 在同一个 Worker 项目的 `Settings -> Variables and Secrets -> Secrets` 中添加：
+
+```text
+ADMIN_PASSWORD=你的密码
+```
+
+4. 在该 Worker 项目的 `Bindings` 中添加 D1 绑定：
+
+- Binding name: `DB`
+- Database: 选择你创建的 `proxypool` 数据库
+
+5. 在 D1 控制台或 Worker 控制台执行初始化 SQL：
+
+```sql
+-- 把 cloudflare/sql/schema.sql 全部执行一次
+```
+
+6. 在 Worker 项目的 `Triggers` 中配置 Cron：
+
+```text
+*/15 * * * *
+```
+
+说明：
+
+- 仓库里的 `wrangler.toml` 已经移除了占位 `database_id`，就是为了避免 Workers Builds 因无效 D1 ID 直接报错。
+- 也就是说，平台部署时，`DB` 绑定应该完全在 Cloudflare Dashboard 上配置，不依赖仓库里的静态 ID。
+
+### 方式二：本地 `wrangler` 命令行部署
+
 1. 创建 D1 数据库
 
 ```bash
 wrangler d1 create proxypool
 ```
 
-2. 把返回的 `database_id` 填到 `wrangler.toml`
+2. 记录返回的 `database_id`
 
-3. 初始化表结构
+3. 本地创建一个不提交仓库的 `wrangler.local.toml`，内容示例：
+
+```toml
+name = "proxypool-worker"
+main = "src/index.js"
+compatibility_date = "2026-06-24"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "proxypool"
+database_id = "替换成你自己的真实 database_id"
+
+[vars]
+ADMIN_USERNAME = "admin"
+WORKER_VALIDATE_MODE = "source"
+CRON_FETCH_BATCH_SIZE = "3"
+```
+
+4. 初始化表结构
 
 ```bash
 wrangler d1 execute proxypool --file=sql/schema.sql
 ```
 
-4. 设置管理接口凭据
+5. 设置管理接口凭据
 
 ```bash
 wrangler secret put ADMIN_USERNAME
@@ -73,7 +148,13 @@ wrangler secret put ADMIN_PASSWORD
 
 说明：建议把 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD` 都放到 secret，避免明文留在配置文件里。
 
-5. 按需调整批量抓取大小
+6. 使用本地配置部署
+
+```bash
+npx wrangler deploy --config wrangler.local.toml
+```
+
+7. 按需调整批量抓取大小
 
 `wrangler.toml` 中提供了：
 
@@ -93,8 +174,12 @@ wrangler dev
 
 ## 部署
 
+如果你走的是 Dashboard connected builds，平台会自动执行部署命令，不需要手动运行 `wrangler deploy`。
+
+如果你走的是本地命令行部署，推荐：
+
 ```bash
-wrangler deploy
+npx wrangler deploy --config wrangler.local.toml
 ```
 
 部署后可直接访问：
@@ -108,6 +193,23 @@ wrangler deploy
 2. 每次只抓取 `CRON_FETCH_BATCH_SIZE` 个已启用抓取器。
 3. Worker 会把当前抓取游标写进 D1 的 `meta` 表，下次从下一个抓取器继续。
 4. `POST /admin/fetch` 的手动触发不受这个批量限制，仍然支持单个抓取器或全部抓取器立即执行。
+
+## 这次报错的原因
+
+你日志里的错误：
+
+```text
+binding DB of type d1 must have a valid `database_id` specified
+```
+
+原因是：
+
+1. Cloudflare 平台构建读取到了仓库里的 `wrangler.toml`
+2. 里面的 `DB` 绑定使用的是占位符 `database_id`
+3. Cloudflare API 在发布版本前会校验这个值是否是真实 D1 数据库 ID
+4. 占位值校验失败，所以部署中断
+
+现在仓库已经移除了这个占位 D1 配置。后续如果你走平台构建，必须在 Dashboard 的 `Bindings` 里配置 `DB`。
 
 ## 管理接口
 
